@@ -13,9 +13,9 @@ from helpers import PostsScraper
 class FacebookBot:
     __username = None
     __password = None
-    __browser = None
+    browser = None
     __post_handler = None
-    __posts_scraper = None
+    posts_scraper = None
     post_ID = None
     likes_limit = None
 
@@ -23,22 +23,25 @@ class FacebookBot:
     __postLikesUrl = 'https://mbasic.facebook.com/ufi/reaction/profile/browser/fetch/?limit={' \
                      'limit}&total_count=17&ft_ent_identifier={post_ID} '
 
+    # Cache
+    last_scraped_ids = None
+
     def __init__(self, username, password):
         self.__username = username
         self.__password = password
-        self.__browser = webdriver.Chrome(r'E:\Progz\chromedriver_win32\chromedriver')
+        self.browser = webdriver.Chrome(r'E:\Progz\chromedriver_win32\chromedriver')
         self.likes_limit = 200
         self.__post_handler = PostHandler()
-        self.__posts_scraper = PostsScraper()
+        self.posts_scraper = PostsScraper(self.browser)
         self.login()
 
     def login(self):
         url = 'https://facebook.com'
 
-        self.__browser.get(url)
+        self.browser.get(url)
 
-        username = self.__browser.find_element_by_id("email")
-        password = self.__browser.find_element_by_id("pass")
+        username = self.browser.find_element_by_id("email")
+        password = self.browser.find_element_by_id("pass")
 
         username.send_keys(self.__username)
         time.sleep(2)
@@ -49,12 +52,13 @@ class FacebookBot:
         username.submit()
         time.sleep(10)
 
-        self.__browser.get('https://mbasic.facebook.com/profile')
+        self.browser.get('https://mbasic.facebook.com/profile')
         # assert self.__browser.current_url == 'https://mbasic.facebook.com/profile', "Login Failed"
 
     def parse_html(self, request_url):
-        self.__browser.get(request_url)
-        page_content = self.__browser.page_source
+
+        self.browser.get(request_url)
+        page_content = self.browser.page_source
         return page_content
 
     def __get_soup(self, url_form, _post_id=-1, likes_limit=200):
@@ -85,33 +89,20 @@ class FacebookBot:
         return self.__post_handler.post_likes(react_type)
 
     def set_browser(self, browser):
-        self.__browser = browser
+        self.browser = browser
+        self.posts_scraper.set_browser(browser)
 
     ###########################################
     ############### SCRAPING ##################
     ###########################################
-    def navigate_next_page(self, soup_tmp):
-        # curr_url = self.__browser.current_url
-        # soup_tmp = BeautifulSoup(self.parse_html(curr_url), "html.parser")
-        div_id = soup_tmp.find('div',
-                               {'id': 'structured_composer_async_container'}).findChildren('div',
-                                                                                           recursive=False)[0]['id']
-        more = self.__browser.find_element_by_id(div_id).find_element_by_tag_name('a')
-        more.click()
+    def scrape_post_ids_by_number(self, profile_url):
+        self.__last_scraped_ids = (profile_url, self.posts_scraper.scrape_profile_posts_by_number(profile_url, 10))
+        return self.__last_scraped_ids
 
-    def scrape_profile_posts_by_number(self, profile_url, posts=10):
-        """
-        Scrapes profile for number of given posts
+    def scrape_post_ids_by_date_range(self, start_date, end_date):
+        pass
 
-        returns: list of posts ids
-        """
-        self.__browser.get(profile_url)
-        posts_ids = []
-        while len(posts_ids) < posts:
-            soup_ = BeautifulSoup(self.parse_html(self.__browser.current_url), "html.parser")
-            posts_ids.extend(self.__posts_scraper.extract_ids(soup_))
-            time.sleep(0.5)
-            self.navigate_next_page(soup_)
-            # print(f"scraped {len(posts_ids)} posts")
-            # clear_output(wait=True)
-        return posts_ids
+    def scrape_post_ids_to_date(self, start_url, target_date):
+        """takes start page and scrapes to date"""
+        self.__last_scraped_ids = self.posts_scraper.scrape_profile_to_date(start_url, target_date)
+        return self.__last_scraped_ids
